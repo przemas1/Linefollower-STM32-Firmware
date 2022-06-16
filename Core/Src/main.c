@@ -27,6 +27,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+#define PWM_MAX 10000/*65535*/
 
 /* USER CODE END PTD */
 
@@ -44,8 +45,10 @@ ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
 TIM_HandleTypeDef htim2;
+int debug = 1;
 
 /* USER CODE BEGIN PV */
+
 
 /* USER CODE END PV */
 
@@ -57,49 +60,29 @@ static void MX_DMA_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
+float measurement;
+float pid_output;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint16_t adc[5];
+
+uint16_t volatile adc[5];
 //int setpoint = 0;
 
-int fbPosition()
+float fbPosition()
 {
-	int measurement;
-    	if 		(adc[0]>1000)
-		{
-    		measurement = -2;
-		}
-		else if (adc[1]>1000)
-		{
-			measurement = -1;
-	    }
-		else if (adc[2]>1000)
-		{
-			measurement = 0;
-		}
-		else if (adc[3]>1000)
-		{
-			measurement = 1;
-		}
-		else if (adc[4]>1000)
-		{
-			measurement = 2;
-		}
+
+    		measurement = -2.0 * 	(float)adc[0];
+    		measurement += -1.0 * 	(float)adc[1];
+    		measurement += 1.0 * 	(float)adc[3];
+    		measurement += 2.0 *	(float)adc[4];	// rozjebany czujnik
 	return 	measurement;
 }
 
 typedef struct {
 	float Kp;
 	float Kd;
-
-	float tau;
-
-	float limMin;
-	float limMax;
-
-	float T;
 
 	float prevError;
 	float differentiator;
@@ -109,6 +92,8 @@ typedef struct {
 
 }PIDController;
 
+PIDController pid;
+
 void 	PIDController_Init(PIDController *pid)
 {
 	pid->prevError  = 0.0f;
@@ -117,51 +102,45 @@ void 	PIDController_Init(PIDController *pid)
 	pid->prevMeasurement = 0.0f;
 
 	pid->out = 0.0f;
+
+	pid->Kp = 30.0;//20
+	pid->Kd = 1;
 }
-float 	PIDController_Update(PIDController *pid, float setpoint, int fbPosition())
+float 	PIDController_Update(PIDController *pid, float setpoint, float fbPosition)
 {
-	float error = setpoint - fbPosition();
+	float error = setpoint - fbPosition;
 
-	float proportional = pid->Kp * error;
+    pid->differentiator = pid->Kd*(error-pid->prevError);
 
-	pid->differentiator = -(2.0f * pid->Kd * (fbPosition() - pid->prevMeasurement)
-	                        + (2.0f * pid->tau - pid->T) * pid->differentiator)
-	                        / (2.0f * pid->tau + pid->T);
+	pid->out = pid->Kp * error + pid->differentiator;
 
-	pid->out = proportional + pid->differentiator;
-
-	    if (pid->out > pid->limMax) {
-
-	        pid->out = pid->limMax;
-
-	    } else if (pid->out < pid->limMin) {
-
-	        pid->out = pid->limMin;
-
-	    }
-
-    pid->prevError       = error;
-    pid->prevMeasurement = fbPosition();
+	pid->prevError = error;
+	pid->prevMeasurement = fbPosition;
 
     return pid->out;
 }
 
-int leftMotor(PIDController *pid)
+int leftMotor(float leftPWM)
 {
-	int leftPWM;
-	return leftPWM;
+
+	leftPWM = PWM_MAX - leftPWM;
+	if(PWM_MAX < leftPWM) leftPWM = PWM_MAX;
+	if(0.0 > leftPWM) leftPWM = 0.0;
+	return (int)leftPWM;
 }
 
-int rightMotor(PIDController *pid)
+int rightMotor(float rightPWM)
 {
-	int rightPWM;
-	return rightPWM;
+	rightPWM = PWM_MAX + rightPWM;
+	if(PWM_MAX < rightPWM) rightPWM = PWM_MAX;
+		if(0.0 > rightPWM) rightPWM = 0.0;
+		return (int)rightPWM;
 }
 
-void motors(int leftMotor(), int rightMotor())
+void motors(int leftMotor, int rightMotor)
 {
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, leftMotor());
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, rightMotor());
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, leftMotor);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, rightMotor);
 }
 /* USER CODE END 0 */
 
@@ -189,6 +168,7 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -197,21 +177,28 @@ int main(void)
   MX_DMA_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  HAL_DMA_Init(&hdma_adc1);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc, 5);
+  HAL_ADC_Start(&hadc1);
   HAL_TIM_Base_Start(&htim2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  PIDController_Init(&pid);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+	  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 	  HAL_GPIO_WritePin(I1_GPIO_Port, I1_Pin, GPIO_PIN_SET);
 	  HAL_GPIO_WritePin(I2_GPIO_Port, I2_Pin, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_SET);
+	  HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_SET);
+	  HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_RESET);
+
+	  float pid_output = PIDController_Update(&pid, 0.0, fbPosition());
+	  if (debug == 1)  motors(leftMotor(pid_output),rightMotor(pid_output));
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -240,6 +227,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -278,6 +266,7 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 1 */
 
   /* USER CODE END ADC1_Init 1 */
+
   /** Common config
   */
   hadc1.Instance = ADC1;
@@ -291,6 +280,7 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
+
   /** Configure Regular Channel
   */
   sConfig.Channel = ADC_CHANNEL_0;
@@ -300,29 +290,37 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
+
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
+
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
+
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
+
   /** Configure Regular Channel
   */
+  sConfig.Channel = ADC_CHANNEL_5;
   sConfig.Rank = ADC_REGULAR_RANK_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -484,5 +482,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
