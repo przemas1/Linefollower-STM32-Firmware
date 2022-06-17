@@ -70,13 +70,13 @@ float pid_output;
 uint16_t volatile adc[5];
 //int setpoint = 0;
 
-float fbPosition()
+float 	fbPosition()
 {
 
     		measurement = -2.0 * 	(float)adc[0];
     		measurement += -1.0 * 	(float)adc[1];
     		measurement += 1.0 * 	(float)adc[3];
-    		measurement += 2.0 *	(float)adc[4];	// rozjebany czujnik
+    		measurement += 2.0 *	(float)adc[4];
 	return 	measurement;
 }
 
@@ -103,8 +103,8 @@ void 	PIDController_Init(PIDController *pid)
 
 	pid->out = 0.0f;
 
-	pid->Kp = 30.0;//20
-	pid->Kd = 1;
+	pid->Kp = 6.0;//20
+	pid->Kd = 0.0;
 }
 float 	PIDController_Update(PIDController *pid, float setpoint, float fbPosition)
 {
@@ -120,21 +120,48 @@ float 	PIDController_Update(PIDController *pid, float setpoint, float fbPosition
     return pid->out;
 }
 
-int leftMotor(float leftPWM)
+int leftMotor(float leftPWM)// PID output
 {
 
+	if( leftPWM < -16000){
+	HAL_GPIO_WritePin(I1_GPIO_Port, I1_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(I2_GPIO_Port, I2_Pin, GPIO_PIN_SET);
+	leftPWM = -0.1 * (PWM_MAX - leftPWM);
+	if( PWM_MAX < leftPWM) leftPWM = 0.1* PWM_MAX;
+	if(-PWM_MAX > leftPWM) leftPWM = -0.1* PWM_MAX;
+
+	}else{
+	HAL_GPIO_WritePin(I1_GPIO_Port, I1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(I2_GPIO_Port, I2_Pin, GPIO_PIN_RESET);
 	leftPWM = PWM_MAX - leftPWM;
-	if(PWM_MAX < leftPWM) leftPWM = PWM_MAX;
-	if(0.0 > leftPWM) leftPWM = 0.0;
+	if( PWM_MAX < leftPWM) leftPWM =  PWM_MAX;
+	if(-PWM_MAX > leftPWM) leftPWM = -PWM_MAX;
+	}
+
+
+
 	return (int)leftPWM;
 }
 
 int rightMotor(float rightPWM)
 {
-	rightPWM = PWM_MAX + rightPWM;
-	if(PWM_MAX < rightPWM) rightPWM = PWM_MAX;
-		if(0.0 > rightPWM) rightPWM = 0.0;
-		return (int)rightPWM;
+	/*rightPWM = PWM_MAX + rightPWM;
+	//i3, i4
+	// przod
+	if(rightPWM < 0.0){
+	HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_RESET);
+
+	}else{
+	HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_SET);
+	}
+
+	if(PWM_MAX  < rightPWM) rightPWM = PWM_MAX;
+	if(-PWM_MAX > rightPWM) rightPWM = -PWM_MAX;
+	if(rightPWM < 0.0) rightPWM = -0.1 * rightPWM;
+*/
+	return (int)rightPWM;
 }
 
 void motors(int leftMotor, int rightMotor)
@@ -190,14 +217,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(I1_GPIO_Port, I1_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(I2_GPIO_Port, I2_Pin, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_RESET);
-
-	  float pid_output = PIDController_Update(&pid, 0.0, fbPosition());
-	  if (debug == 1)  motors(leftMotor(pid_output),rightMotor(pid_output));
+	 HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+	 float pid_output = PIDController_Update(&pid, 0.0, fbPosition());
+	 if (debug == 1)  motors(leftMotor(pid_output),rightMotor(pid_output));
 
     /* USER CODE END WHILE */
 
