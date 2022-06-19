@@ -73,10 +73,10 @@ uint16_t volatile adc[5];
 float 	fbPosition()
 {
 
-    		measurement = -2.0 * 	(float)adc[0];
+    		measurement  = -2.0 * 	(float)adc[0];
     		measurement += -1.0 * 	(float)adc[1];
-    		measurement += 1.0 * 	(float)adc[3];
-    		measurement += 2.0 *	(float)adc[4];
+    		measurement +=  1.0 * 	(float)adc[3];
+    		measurement +=  2.0 *	(float)adc[4];
 	return 	measurement;
 }
 
@@ -103,8 +103,8 @@ void 	PIDController_Init(PIDController *pid)
 
 	pid->out = 0.0f;
 
-	pid->Kp = 6.0;//20
-	pid->Kd = 0.0;
+	pid->Kp = 6.0;
+	pid->Kd = 1.0;
 }
 float 	PIDController_Update(PIDController *pid, float setpoint, float fbPosition)
 {
@@ -138,29 +138,26 @@ int leftMotor(float leftPWM)// PID output
 	if(-PWM_MAX > leftPWM) leftPWM = -PWM_MAX;
 	}
 
-
-
 	return (int)leftPWM;
 }
 
 int rightMotor(float rightPWM)
 {
-	/*rightPWM = PWM_MAX + rightPWM;
-	//i3, i4
-	// przod
-	if(rightPWM < 0.0){
-	HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_RESET);
+	if( leftPWM > 16000){
+	HAL_GPIO_WritePin(I1_GPIO_Port, I4_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(I2_GPIO_Port, I3_Pin, GPIO_PIN_SET);
+	rightPWM = -0.1 * (PWM_MAX - rightPWM);
+	if( PWM_MAX < rightPWM) rightPWM = 0.1* PWM_MAX;
+	if(-PWM_MAX > rightPWM) rightPWM = -0.1* PWM_MAX;
 
 	}else{
-	HAL_GPIO_WritePin(I3_GPIO_Port, I3_Pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(I4_GPIO_Port, I4_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(I1_GPIO_Port, I4_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(I2_GPIO_Port, I3_Pin, GPIO_PIN_RESET);
+	rightPWM = PWM_MAX + rightPWM;
+	if( PWM_MAX < rightPWM) rightPWM =  PWM_MAX;
+	if(-PWM_MAX > rightPWM) rightPWM = -PWM_MAX;
 	}
 
-	if(PWM_MAX  < rightPWM) rightPWM = PWM_MAX;
-	if(-PWM_MAX > rightPWM) rightPWM = -PWM_MAX;
-	if(rightPWM < 0.0) rightPWM = -0.1 * rightPWM;
-*/
 	return (int)rightPWM;
 }
 
